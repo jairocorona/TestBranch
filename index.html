@@ -1,0 +1,225 @@
+<!-- 
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplicación de Escritorio</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      text-align: center;
+      background-color: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    input[type="file"] {
+      margin-bottom: 10px;
+    }
+    button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+    <div class="container">
+      <h1>Seleccionar Archivo CSV</h1>
+      <input type="file" id="fileInput">
+      <br><br>
+      <label><input type="checkbox" id="invoiceCheckbox"> Invoice</label>
+      <label><input type="checkbox" id="shipmentCheckbox"> Shipment</label>
+      <br><br>
+      <button id="executeButton">Ejecutar Acción</button>
+    </div>
+  
+    <script>
+      const { ipcRenderer } = require('electron');
+    
+      let filePath; // Declara la variable filePath aquí para que esté disponible en ambos eventos
+    
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('fileInput').addEventListener('change', (event) => {
+          filePath = event.target.files[0].path; // Asigna el valor de filePath dentro del evento 'change'
+        });
+    
+        document.getElementById('executeButton').addEventListener('click', () => {
+          const invoiceChecked = document.getElementById('invoiceCheckbox').checked;
+          const shipmentChecked = document.getElementById('shipmentCheckbox').checked;
+  
+          if (invoiceChecked && !shipmentChecked) {
+              ipcRenderer.send('execute-action', { tipo: 'invoice', nombreArchivo: filePath });
+          } else if (!invoiceChecked && shipmentChecked) {
+              ipcRenderer.send('execute-action', { tipo: 'shipment', nombreArchivo: filePath });
+          } else {
+              ipcRenderer.send('action-complete', 'Por favor, seleccione una opción.');
+          }
+        });
+    
+        ipcRenderer.on('action-complete', (event, message) => {
+          try {
+            console.log(message);
+            alert(message);
+          } catch (error) {
+            console.error(error);
+            console.log(message);
+            alert(message);
+          }
+        });
+      });
+    </script>
+  </body>
+  
+</html>
+ -->
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplicación de Escritorio</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #8a2be2;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      text-align: center;
+      background-color: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 35px;
+      text-align: center;
+    }
+    button {
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 1);
+      background-color: #8a2be2;
+      color: #ffffff;
+      padding: 4px 25px;
+    }
+    input[type="file"] {
+      margin-bottom: 10px;
+      display: none; /* Oculta el input de tipo archivo */
+    }
+    label {
+      display: inline-block;
+      padding: 20px;
+      background-color: transparent;
+      color: #333;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 5);
+      transition: background-color 0.3s ease;
+    }
+    label:hover {
+      background-color: #738ca5;
+      color: #fff;
+    }
+    #cloudIcon {
+      width: 50px;
+      height: auto;
+      margin-bottom: 10px;
+    }
+    #fileLabel {
+      font-size: 16px;
+    }
+    #fileLabel:hover {
+      text-decoration: underline;
+    }
+    #fileName {
+      display: block;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Seleccionar Archivo CSV</h1>
+    <input type="file" id="fileInput">
+    <label for="fileInput">
+      <img id="cloudIcon" src="./carga-de-carpeta.jpeg" alt="Cloud Icon"><br>
+      <span id="fileLabel">Seleccionar archivo</span>
+    </label>
+    <span id="fileName"></span> <!-- Aquí se mostrará el nombre del archivo -->
+    <br><br>
+    <label><input type="checkbox" id="invoiceCheckbox"> Invoice</label>
+    <label><input type="checkbox" id="shipmentCheckbox"> Shipment</label>
+    <br><br>
+    <button id="executeButton">Ejecutar Acción</button>
+  </div>
+
+  <script>
+    if (typeof require === 'undefined') {
+        window.ipcRenderer = undefined;
+    }
+    const { ipcRenderer } = require('electron');
+
+    let filePath; // Declara la variable filePath aquí para que esté disponible en ambos eventos
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('fileInput').addEventListener('change', (event) => {
+        filePath = event.target.files[0].path; // Asigna el valor de filePath dentro del evento 'change'
+        document.getElementById('fileName').textContent = event.target.files[0].name; // Muestra el nombre del archivo seleccionado
+      });
+
+      document.getElementById('executeButton').addEventListener('click', () => {
+        const invoiceChecked = document.getElementById('invoiceCheckbox').checked;
+        const shipmentChecked = document.getElementById('shipmentCheckbox').checked;
+
+        if (invoiceChecked && !shipmentChecked) {
+            ipcRenderer.send('execute-action', { tipo: 'invoice', nombreArchivo: filePath });
+        } else if (!invoiceChecked && shipmentChecked) {
+            ipcRenderer.send('execute-action', { tipo: 'shipment', nombreArchivo: filePath });
+        } else {
+            ipcRenderer.send('action-complete', 'Por favor, seleccione una opción.');
+        }
+      });
+
+      ipcRenderer.on('action-complete', (event, message) => {
+        try {
+          console.log(message);
+          alert(message);
+        } catch (error) {
+          console.error(error);
+          console.log(message);
+          alert(message);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
+
+ 
