@@ -4,9 +4,9 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path'); // Agrega esta línea para importar el módulo 'path'
 const csv = require('csv-parser');
-const os = require('os');
 const { ipcRenderer } = require('electron');
-
+const { parse } = require('json2csv');
+const { dialog } = require('electron');
 
 
 async function leerNumerosDeOrden(nombreArchivo) {
@@ -43,6 +43,7 @@ async function leerNumerosDeOrden(nombreArchivo) {
 let errores = [];
 
 async function enviarSolicitud(numeroOrden, token) {
+   
     const url = `https://stg7.shop.samsung.com/latin/cac/rest/V1/order/${numeroOrden}/invoice`;
     const payload = {
         capture: true,
@@ -64,11 +65,12 @@ async function enviarSolicitud(numeroOrden, token) {
         
         return response.data;
     } catch (error) {
-        console.error(`Error al procesar/enviar la solicitud para el número de orden ${numeroOrden}:`, error.response ? error.response.data : error.message);
-        console.error(`Error al procesar/ enviar el número de orden ${numeroOrden}:`, error.response.data);
+        console.error(`Error al procesar/enviar la solicitud para el numero de orden ${numeroOrden}:`, error.response ? error.response.data : error.message);
+        console.error(`Error al procesar/ enviar el numero de orden ${numeroOrden}:`, error.response.data);
         console.error('Error al enviar la solicitud:', error.response ? error.response.data : error.message);
         errores.push({ numeroOrden, mensaje: error.response ? error.response.data : error.message });
-        return null;
+        
+       
     }
 }
 
@@ -187,7 +189,7 @@ async function enviarSolicitudShip(numerosDeOrden, token) {
 
 async function ejecutarAccion(tipo, nombreArchivo) {
     const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
-  
+    errores = [];
     let numerosDeOrden;
     if (tipo === 'invoice') {
         numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
@@ -208,14 +210,19 @@ async function ejecutarAccion(tipo, nombreArchivo) {
                 }
                 ordenesProcesadas++;
                 const progreso = (ordenesProcesadas / totalOrdenes) * 100;
+                
+                
                 if (typeof ipcRenderer !== 'undefined') {
+                    
                     ipcRenderer.send('progress-update', progreso);
                 }   
                 
             }
+            guardarErrores(errores)
+            errores = [];
         } catch (error) {
             console.error('Error al procesar la solicitud:', error);
-            guardarErrores([error]);
+            guardarErrores(error)
         }
     } else if (tipo === 'shipment') {
         // Resto del código para tipo 'shipment'
@@ -247,210 +254,100 @@ async function ejecutarAccion(tipo, nombreArchivo) {
 }
 
 
-/*
-async function ejecutarAccion(tipo, nombreArchivo) {
-    const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
-  
-    let numerosDeOrden;
-    if (tipo === 'invoice') {
-        numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
-        if (!numerosDeOrden) {
-            console.log('Error al leer el archivo CSV');
-            return;
-        }
-
-        try {
-            for (const numeroOrden of numerosDeOrden) {
-                const respuesta = await enviarSolicitud(numeroOrden, token);
-                console.log('Números de orden procesados:', numeroOrden);
-                if (respuesta) {
-                    guardarInformacion(numeroOrden, respuesta);
-                }
-            }
-        } catch (error) {
-            console.error('Error al procesar la solicitud:', error);
-            guardarErrores([error]);
-        }
-    } else if (tipo === 'shipment') {
-        numerosDeOrden = await leerNumerosDeOrdenShipment(nombreArchivo);
-        if (!numerosDeOrden) {
-            console.log('Error al leer el archivo CSV');
-            return;
-        }
-
-        try {
-            await enviarSolicitudShip(numerosDeOrden, token);
-        } catch (error) {
-            console.error('Error al procesar la solicitud de shipment:', error);
-            guardarErroresShip([error]);
-        }
-    } else {
-        console.error('Tipo de acción no válido:', tipo);
-    }
-}
-
-
-
-
-
-
-
-
-
-
-async function ejecutarAccion(tipo, nombreArchivo) {
-    const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
-  
-    let numerosDeOrden;
-    if (tipo === 'invoice') {
-        numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
-        const errores = [];
-
-        try {
-            for (const numeroOrden of numerosDeOrden) {
-                const respuesta = await enviarSolicitud(numeroOrden, token);
-                console.log('Números de orden procesados:', numeroOrden);
-                if (respuesta) {
-                    guardarInformacion(numeroOrden, respuesta);
-                }
-            }
-        } catch (error) {
-            console.error('Error al procesar la solicitud:', error);
-            errores.push(error);
-        }
-        
-        guardarErrores(errores);
-    } else if (tipo === 'shipment') {
-        numerosDeOrden = await leerNumerosDeOrdenShipment(nombreArchivo);
-        const errores = [];
-
-        try {
-            
-            let respuesta = await enviarSolicitudShip(numerosDeOrden, token);
-            console.log('Números de orden procesados:', numerosDeOrden);
-            if (respuesta) {
-                guardarInformacionShipment(numerosDeOrden, respuesta);
-            }
-        } catch (error) {
-            console.error('Error al procesar la solicitud:', error);
-            errores.push(error);
-        }
-        
-        guardarErroresShip(errores);
-    } else {
-        console.error('Tipo de acción no válido:', tipo);
-    }
-}
-
-
-
-
-
-
-/*
-async function ejecutarAccion(tipo, nombreArchivo) {
-    const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
-  
-    let numerosDeOrden;
-    if (tipo === 'invoice') {
-        numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
-    } else if (tipo === 'shipment') {
-        numerosDeOrden = await leerNumerosDeOrdenShipment(nombreArchivo);
-    }
-
-    if (!numerosDeOrden) {
-        console.log('Error al leer el archivo CSV');
-        return;
-    }
-
-    const errores = [];
-
-    try {
-        let respuesta;
-        if (tipo === 'invoice') {
-            respuesta = await enviarSolicitud(numerosDeOrden, token);
-        } else if (tipo === 'shipment') {
-            respuesta = await enviarSolicitudShip(numerosDeOrden, token);
-        }
-        
-        console.log('Números de orden procesados:', numerosDeOrden);
-        
-        if (respuesta) {
-            if (tipo === 'invoice') {
-                guardarInformacion(numerosDeOrden, respuesta);
-            } else if (tipo === 'shipment') {
-                guardarInformacionShipment(numerosDeOrden, respuesta);
-            }
-        }
-    } catch (error) {
-        console.error('Error al procesar la solicitud:', error);
-        errores.push(error);
-    }
-    
-    guardarErrores(errores);
-}
-
-
-
-
-
-/*
-async function ejecutarAccion(nombreArchivo) {
-    const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
-  
-    const numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
-    for (const numeroOrden of numerosDeOrden) {
-        const respuesta = await enviarSolicitud(numeroOrden, token); // Asegúrate de pasar correctamente numeroOrden
-        console.log('Números de orden procesados:', numerosDeOrden);
-        if (respuesta) {
-            
-            guardarInformacion(numeroOrden, respuesta);
-        }
-    }
-    guardarErrores(errores);
-}
-
-function guardarErrores(numeroOrden, mensajeError) {
-    const nombreArchivo = path.join(__dirname, `${numeroOrden}_error.json`);
-    const data = {
-        numeroOrden: numeroOrden,
-        error: mensajeError
-    };
-    fs.writeFileSync(nombreArchivo, JSON.stringify(data, null, 2));
-    console.log(`Error para el número de orden ${numeroOrden} guardado en ${nombreArchivo}`);
-}*/
 function obtenerRutaEscritorio() {
-    return path.join(os.homedir(), 'Desktop');
+    return 'C:\\Errores';
+}
+function obtenerRutaGuardado() {
+    return 'C:\\Enviado';
 }
 
 function guardarErroresShip(errores, mensajeError) {
-    const nombreArchivo = path.join(obtenerRutaEscritorio(), 'erroresShipment.json');
-    const data = {
-        errores: errores,
-        mensajeError: mensajeError
-    };
-    fs.writeFileSync(nombreArchivo, JSON.stringify(data, null, 2));
-    console.log(`Errores de Shipment guardados en ${nombreArchivo}`);
+    const nombreArchivo = 'erroresShipment.csv';
+    const rutaErrores = obtenerRutaEscritorio();
+    const rutaCompleta = path.join(rutaErrores, nombreArchivo);
+
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaErrores)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaErrores);
+        console.log(`Carpeta de errores creada en ${rutaErrores}`);
+    }
+
+    // Crear el contenido CSV a partir de los errores
+    const fields = ['Error', 'Descripción'];
+    const csv = parse(errores.map(error => ({ 'Error': error, 'Descripción': mensajeError })), { fields });
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, modificar el archivo
+            fs.appendFileSync(rutaCompleta, csv);
+            console.log(`Errores de Shipment agregados a ${rutaCompleta}`);
+        } else {
+            // Si no existe, crear uno nuevo
+            fs.writeFileSync(rutaCompleta, csv);
+            console.log(`Errores de Shipment guardados en ${rutaCompleta}`);
+        }
+        fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        console.error('Error al guardar los errores:', error);
+        dialog.showErrorBox('Error al guardar los errores Shipment\nVerificar si el archivo de errores se encuentra abierta', error.message);
+    }
 }
 
+
 function guardarInformacionShipment(numeroOrden, respuesta) {
-    const nombreArchivo = path.join(obtenerRutaEscritorio(), `GuardarShipment_${numeroOrden}.json`);
+    const nombreArchivo = path.join(obtenerRutaGuardado(), `GuardarShipment_${numeroOrden}.json`);
     fs.writeFileSync(nombreArchivo, JSON.stringify(respuesta, null, 2));
     console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${nombreArchivo}`);
 }
 
 
-
 function guardarErrores(errores) {
-    const nombreArchivo = path.join(obtenerRutaEscritorio(), 'erroresInvoice.json');
-    console.log("Ruta?"+nombreArchivo)
-    console.log("Errores"+errores)
-    fs.writeFileSync(nombreArchivo, JSON.stringify(errores, null, 2));
-    console.log(`Errores guardados en ${nombreArchivo}`);
+       
+    const nombreArchivo = 'erroresInvoice.csv';
+    const rutaErrores = obtenerRutaEscritorio();
+    const rutaCompleta = path.join(rutaErrores, nombreArchivo);
+    console.log("//*************************Entro a la funcion invoice" + errores)
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaErrores)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaErrores);
+        console.log(`Carpeta de errores creada en ${rutaErrores}`);
+    }
+
+    // Crear el contenido CSV a partir de los errores
+    const fields = ['Numero de Orden', 'Mensaje de Error'];
+    const csvContent = parse(errores.map(error => ({ 'Numero de Orden': error.numeroOrden, 'Mensaje de Error': error.mensaje })), { fields });
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, modificar el archivo
+            
+            fs.appendFileSync(rutaCompleta, csvContent);
+            
+            console.log(`Errores de Invoice agregados a ${rutaCompleta}`);
+        } else {
+            // Si no existe, crear uno nuevo
+            fs.writeFileSync(rutaCompleta, csvContent);
+            console.log(`Errores de Invoice guardados en ${rutaCompleta}`);
+        }
+        
+        fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        
+        console.error('Error al guardar los errores Invoice:', error);
+        dialog.showErrorBox('Error al guardar los errores Invoice\nVerificar si el archivo de errores se encuentra abierta', error.message);
+        
+    }
+
 }
 
+
+
 function guardarInformacion(numeroOrden, respuesta) {
-    const nombreArchivo = path.join(obtenerRutaEscritorio(), 'GuardarInvoice.json');
+    const nombreArchivo = path.join(obtenerRutaGuardado(), 'GuardarInvoice.json');
     fs.writeFileSync(nombreArchivo, JSON.stringify(respuesta, null, 2));
     console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${nombreArchivo}`);
 }
