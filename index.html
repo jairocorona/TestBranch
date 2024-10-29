@@ -38,6 +38,17 @@
       margin-bottom: 10px;
       display: none; /* Oculta el input de tipo archivo */
     }
+    input[type="text"] {
+      border-radius: 5px;
+      padding: 4px 25px;
+    }
+    #entityFields {
+      border-radius: 15px;
+     margin-bottom: 5px;
+      margin-top: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 1);
+      padding: 4px 25px;
+    }
     label {
       display: inline-block;
       padding: 20px;
@@ -81,6 +92,10 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    .conditional-input {
+      display: none;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -91,15 +106,22 @@
       <img id="cloudIcon" src="./file-upload.png" alt="Cloud Icon"><br>
       <span id="fileLabel">Seleccionar archivo .csv</span>
     </label>
-    <span id="fileName"></span> <!-- Aquí se mostrará el nombre del archivo -->
-    <div id="loadingIndicator" style="display: none;"></div> <!-- Indicador de carga -->
+    <span id="fileName"></span>
+    <div id="loadingIndicator" style="display: none;"></div>
     <br><br>
     <select id="actionSelect">
       <option value="">Seleccione una opcion</option>
       <option value="invoice">Invoice</option>
       <option value="shipment">Shipment</option>
+      <option value="entity">Entity</option>
     </select>
     <br><br>
+    <div id="entityFields" style="display: none;">
+      <input type="text" id="inputComment" placeholder="Comentario"><br><br>
+      <input type="text" id="inputCustomerNotified" placeholder="Notificación al cliente"><br><br>
+      <input type="text" id="inputVisibleFront" placeholder="Visible en el frente"><br><br>
+      <input type="text" id="inputStatus" placeholder="Estado"><br><br>
+    </div>
     <button id="executeButton">Ejecutar Accion</button>
   </div>
 
@@ -109,23 +131,66 @@
     }
     const { ipcRenderer } = require('electron');
 
-    let filePath; // Declara la variable filePath aquí para que esté disponible en ambos eventos
+    let filePath;
 
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('fileInput').addEventListener('change', (event) => {
-        filePath = event.target.files[0].path; // Asigna el valor de filePath dentro del evento 'change'
-        document.getElementById('fileName').textContent = event.target.files[0].name; // Muestra el nombre del archivo seleccionado
+        filePath = event.target.files[0].path;
+        document.getElementById('fileName').textContent = event.target.files[0].name;
+      });
+
+      document.getElementById('actionSelect').addEventListener('change', (event) => {
+        const selectedAction = event.target.value;
+        const entityFields = document.getElementById('entityFields');
+        if (selectedAction === 'entity') {
+          entityFields.style.display = 'block';
+          // Asegurarse de que los campos estén habilitados
+          document.getElementById('inputComment').disabled = false;
+          document.getElementById('inputCustomerNotified').disabled = false;
+          document.getElementById('inputVisibleFront').disabled = false;
+          document.getElementById('inputStatus').disabled = false;
+        } else {
+          entityFields.style.display = 'none';
+          // Limpiar los campos de entrada cuando se selecciona una opción diferente a "Entity"
+          document.getElementById('inputComment').value = '';
+          document.getElementById('inputCustomerNotified').value = '';
+          document.getElementById('inputVisibleFront').value = '';
+          document.getElementById('inputStatus').value = '';
+        }
       });
 
       document.getElementById('executeButton').addEventListener('click', () => {
         const selectedAction = document.getElementById('actionSelect').value;
+        const comment = document.getElementById('inputComment').value;
+        const customerNotified = document.getElementById('inputCustomerNotified').value;
+        const visibleFront = document.getElementById('inputVisibleFront').value;
+        const status = document.getElementById('inputStatus').value;
+
         if (!filePath) {
           alert('Por favor, seleccione un archivo .csv');
           return;
         }
+
         if (selectedAction) {
           document.getElementById('loadingIndicator').style.display = 'inline-block';
-          ipcRenderer.send('execute-action', { tipo: selectedAction, nombreArchivo: filePath });
+          ipcRenderer.send('execute-action', {
+            tipo: selectedAction,
+            nombreArchivo: filePath,
+            comment,
+            customerNotified,
+            visibleFront,
+            status
+          });
+
+          // Limpiar los campos después de enviar los datos
+          document.getElementById('inputComment').value = '';
+          document.getElementById('inputCustomerNotified').value = '';
+          document.getElementById('inputVisibleFront').value = '';
+          document.getElementById('inputStatus').value = '';
+          document.getElementById('actionSelect').value = '';
+          document.getElementById('fileName').textContent = '';
+          filePath = null;
+          document.getElementById('entityFields').style.display = 'none';
         } else {
           alert('Por favor, seleccione una opcion');
         }
@@ -135,12 +200,11 @@
         try {
           console.log(message);
           alert(message);
+          location.reload();
         } catch (error) {
           console.error(error);
-          console.log(message);
           alert(message);
-        }finally {
-          // Ocultar el indicador de carga cuando se completa la acción
+        } finally {
           document.getElementById('loadingIndicator').style.display = 'none';
         }
       });

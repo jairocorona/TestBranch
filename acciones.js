@@ -43,7 +43,7 @@ async function leerNumerosDeOrden(nombreArchivo) {
 let errores = [];
 
 async function enviarSolicitud(numeroOrden, token) {
-   
+
     const url = `https://stg7.shop.samsung.com/latin/cac/rest/V1/order/${numeroOrden}/invoice`;
     const payload = {
         capture: true,
@@ -62,15 +62,48 @@ async function enviarSolicitud(numeroOrden, token) {
         };
         const response = await axios.post(url, payload, { headers });
         console.log(`Respuesta recibida para el número de orden ${numeroOrden}:`, response.data);
-        
+
         return response.data;
     } catch (error) {
         console.error(`Error al procesar/enviar la solicitud para el numero de orden ${numeroOrden}:`, error.response ? error.response.data : error.message);
         console.error(`Error al procesar/ enviar el numero de orden ${numeroOrden}:`, error.response.data);
         console.error('Error al enviar la solicitud:', error.response ? error.response.data : error.message);
         errores.push({ numeroOrden, mensaje: error.response ? error.response.data : error.message });
-        
-       
+
+    }
+}
+
+
+let erroresEntity = [];
+
+async function enviarSolicitudEntity(numeroOrden, token,comment, customerNotified, visibleFront, status) {
+
+    const url = `https://shop.samsung.com/latin/cac/rest/V1/orders/${numeroOrden}/comments`;
+    const payload = {
+        statusHistory: {
+            comment: comment,
+            is_customer_notified: customerNotified,
+            is_visible_on_front: visibleFront,
+            status: status
+        }
+    };
+    //console.log('Payload a enviar:', payload);
+    try {
+       // console.log(`Enviando solicitud para el número de orden ${numeroOrden} a la URL: ${url}`);
+        //console.log('Payload a enviar:', payload);
+        const headers = {
+            Authorization: `Bearer ${token}`
+        };
+        const response = await axios.post(url, payload, { headers });
+        console.log(`Respuesta recibida para el número de orden ${numeroOrden}:`, response);
+
+        return response.data;
+    } catch (error) {
+        //console.error(`Error al procesar/enviar la solicitud para el numero de orden ${numeroOrden}:`, error.response ? error.response.data : error.message);
+       // console.error(`Error al procesar/ enviar el numero de orden ${numeroOrden}:`, error.response.data);
+        console.error('Error al enviar la solicitud:', error.response ? error.response.data : error.message);
+        erroresEntity.push({ numeroOrden, mensaje: error.response ? error.response.data : error.message });
+
     }
 }
 
@@ -187,9 +220,10 @@ async function enviarSolicitudShip(numerosDeOrden, token) {
     }
 }
 
-async function ejecutarAccion(tipo, nombreArchivo) {
+async function ejecutarAccion(tipo, nombreArchivo, comment, customerNotified, visibleFront, status) {
     const token = '6vjnh5h3cmf8trvje9dcz9z0gcg2hhql'; // Reemplaza 'tu_token_de_autorizacion' con tu token real
     errores = [];
+    erroresEntity = [];
     let numerosDeOrden;
     if (tipo === 'invoice') {
         numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
@@ -210,19 +244,18 @@ async function ejecutarAccion(tipo, nombreArchivo) {
                 }
                 ordenesProcesadas++;
                 const progreso = (ordenesProcesadas / totalOrdenes) * 100;
-                
-                
+
                 if (typeof ipcRenderer !== 'undefined') {
-                    
+
                     ipcRenderer.send('progress-update', progreso);
-                }   
-                
+                }
+
             }
             guardarErrores(errores)
             errores = [];
         } catch (error) {
-            console.error('Error al procesar la solicitud:', error);
-            guardarErrores(error)
+            //console.error('Error al procesar la solicitud:', error);
+            //guardarErrores(error)
         }
     } else if (tipo === 'shipment') {
         // Resto del código para tipo 'shipment'
@@ -238,7 +271,7 @@ async function ejecutarAccion(tipo, nombreArchivo) {
             for (const numeroOrden of numerosDeOrden) {
                 // Lógica para enviar la solicitud de shipment
                 ordenesProcesadas++;
-                
+
                 const progreso = (ordenesProcesadas / totalOrdenes) * 100;
                 if (typeof ipcRenderer !== 'undefined') {
                     ipcRenderer.send('progress-update', progreso);
@@ -248,7 +281,42 @@ async function ejecutarAccion(tipo, nombreArchivo) {
             console.error('Error al procesar la solicitud de shipment:', error);
             guardarErroresShip([error]);
         }
-    } else {
+    }else if (tipo === 'entity'){
+
+        numerosDeOrden = await leerNumerosDeOrden(nombreArchivo);
+        if (!numerosDeOrden) {
+            console.log('Error al leer el archivo CSV');
+            return;
+        }
+
+        try {
+            const totalOrdenes = numerosDeOrden.length;
+            let ordenesProcesadas = 0;
+            for (const numeroOrden of numerosDeOrden) {
+
+                const respuesta = await enviarSolicitudEntity(numeroOrden, token, comment, customerNotified, visibleFront, status);
+                console.log('Números de orden procesados:', numeroOrden);
+                if (respuesta) {
+                    guardarInformacionEntity(numeroOrden, respuesta);
+                }
+
+                ordenesProcesadas++;
+                const progreso = (ordenesProcesadas / totalOrdenes) * 100;
+                if (typeof ipcRenderer !== 'undefined') {
+
+                    ipcRenderer.send('progress-update', progreso);
+                }
+
+            }
+            guardarErroresEntity(erroresEntity)
+            erroresEntity = [];
+        } catch (error) {
+            console.error('Error al procesar la solicitud:', error);
+            guardarErroresEntity(errores)
+        }
+
+
+    }else {
         console.error('Tipo de acción no válido:', tipo);
     }
 }
@@ -260,6 +328,7 @@ function obtenerRutaEscritorio() {
 function obtenerRutaGuardado() {
     return 'C:\\Enviado';
 }
+
 
 function guardarErroresShip(errores, mensajeError) {
     const nombreArchivo = 'erroresShipment.csv';
@@ -297,9 +366,40 @@ function guardarErroresShip(errores, mensajeError) {
 
 
 function guardarInformacionShipment(numeroOrden, respuesta) {
-    const nombreArchivo = path.join(obtenerRutaGuardado(), `GuardarShipment_${numeroOrden}.json`);
-    fs.writeFileSync(nombreArchivo, JSON.stringify(respuesta, null, 2));
-    console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${nombreArchivo}`);
+    const nombreArchivo = 'RespuestasAPIShipment.csv';
+    const rutaGuardado = obtenerRutaGuardado();
+    const rutaCompleta = path.join(rutaGuardado, nombreArchivo);
+    //const nombreArchivo = path.join(obtenerRutaGuardado(), 'RespuestasAPI.csv');
+    const fields = ['Numero de Orden', 'Respuesta'];
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaGuardado)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaGuardado);
+        console.log(`Carpeta de errores creada en ${rutaGuardado}`);
+    }
+    // Convertir la respuesta en una cadena de texto separada por comas
+    const respuestaFormateada = respuesta.toString(); // Esto es un ejemplo, podrías ajustarlo según el tipo de respuesta
+
+    // Crear la línea de contenido CSV
+    const csvContent = `${numeroOrden},${respuestaFormateada}\n`;
+
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, agregar al archivo
+            fs.appendFileSync(rutaCompleta, csvContent);
+            console.log(`Respuesta para el número de orden ${numeroOrden} agregada a ${rutaCompleta}`);
+           // fs.appendFileSync(rutaCompleta, separatorRow);
+        } else {
+            // Si no existe, crear uno nuevo con los encabezados
+            fs.writeFileSync(rutaCompleta, `${fields.join(',')}\n${csvContent}`);
+            console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${rutaCompleta}`);
+        }
+        fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        console.error('Error al guardar la respuesta del API Shipment:', error);
+    }
 }
 
 
@@ -308,7 +408,7 @@ function guardarErrores(errores) {
     const nombreArchivo = 'erroresInvoice.csv';
     const rutaErrores = obtenerRutaEscritorio();
     const rutaCompleta = path.join(rutaErrores, nombreArchivo);
-    console.log("//*************************Entro a la funcion invoice" + errores)
+    console.log("//*************************Entro a la funcion invoice" , errores)
     // Verificar si la carpeta de errores existe
     if (!fs.existsSync(rutaErrores)) {
         // Si no existe, la creamos
@@ -345,12 +445,141 @@ function guardarErrores(errores) {
 }
 
 
+function guardarErroresEntity(erroresEntity) {
 
+    const nombreArchivo = 'erroresEntity.csv';
+    const rutaErrores = obtenerRutaEscritorio();
+    const rutaCompleta = path.join(rutaErrores, nombreArchivo);
+    console.log("//*************************Entro a la funcion entity" , erroresEntity)
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaErrores)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaErrores);
+        console.log(`Carpeta de errores creada en ${rutaErrores}`);
+    }
+
+    // Crear el contenido CSV a partir de los errores
+    const fields = ['Numero de Orden', 'Mensaje de Error'];
+    const csvContent = parse(erroresEntity.map(error => ({ 'Numero de Orden': error.numeroOrden, 'Mensaje de Error': error.mensaje })), { fields });
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, modificar el archivo
+            
+            fs.appendFileSync(rutaCompleta, csvContent);
+            
+            console.log(`Errores de entity agregados a ${rutaCompleta}`);
+        } else {
+            // Si no existe, crear uno nuevo
+            fs.writeFileSync(rutaCompleta, csvContent);
+            console.log(`Errores de entity guardados en ${rutaCompleta}`);
+        }
+        
+        fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        
+        console.error('Error al guardar los errores entity:', error);
+        dialog.showErrorBox('Error al guardar los errores entity\nVerificar si el archivo de errores se encuentra abierta', error.message);
+        
+    }
+
+}
+
+
+/*
 function guardarInformacion(numeroOrden, respuesta) {
     const nombreArchivo = path.join(obtenerRutaGuardado(), 'GuardarInvoice.json');
     fs.writeFileSync(nombreArchivo, JSON.stringify(respuesta, null, 2));
     console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${nombreArchivo}`);
 }
+*/
+function guardarInformacion(numeroOrden, respuesta) {
+    const nombreArchivo = 'RespuestasAPIInvoice.csv';
+    const rutaGuardado = obtenerRutaGuardado();
+    const rutaCompleta = path.join(rutaGuardado, nombreArchivo);
+    //const nombreArchivo = path.join(obtenerRutaGuardado(), 'RespuestasAPI.csv');
+    const fields = ['Numero de Orden', 'Respuesta'];
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaGuardado)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaGuardado);
+        console.log(`Carpeta de errores creada en ${rutaGuardado}`);
+    }
+    // Convertir la respuesta en una cadena de texto separada por comas
+    const respuestaFormateada = respuesta.toString(); // Esto es un ejemplo, podrías ajustarlo según el tipo de respuesta
+
+    // Crear la línea de contenido CSV
+    const csvContent = `${numeroOrden},${respuestaFormateada}\n`;
+    
+
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, agregar al archivo
+            fs.appendFileSync(rutaCompleta, csvContent);
+            console.log(`Respuesta para el número de orden ${numeroOrden} agregada a ${rutaCompleta}`);
+            fs.appendFileSync(rutaCompleta, separatorRow);
+        } else {
+            // Si no existe, crear uno nuevo con los encabezados
+            fs.writeFileSync(rutaCompleta, `${fields.join(',')}\n${csvContent}`);
+            console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${rutaCompleta}`);
+        }
+        //fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        console.error('Error al guardar la respuesta del API Invoice:', error);
+    }
+}
+
+
+function guardarInformacionEntity(numeroOrden, respuesta) {
+    const nombreArchivo = 'RespuestasAPIEntity.csv';
+    const rutaGuardado = obtenerRutaGuardado();
+    const rutaCompleta = path.join(rutaGuardado, nombreArchivo);
+    //const nombreArchivo = path.join(obtenerRutaGuardado(), 'RespuestasAPI.csv');
+    const fields = ['Numero de Orden', 'Respuesta'];
+    const separatorRow = '\n//////////////////////////////////////////////////\n';
+    // Verificar si la carpeta de errores existe
+    if (!fs.existsSync(rutaGuardado)) {
+        // Si no existe, la creamos
+        fs.mkdirSync(rutaGuardado);
+        console.log(`Carpeta de errores creada en ${rutaGuardado}`);
+    }
+    // Convertir la respuesta en una cadena de texto separada por comas
+    const respuestaFormateada = respuesta.toString(); // Esto es un ejemplo, podrías ajustarlo según el tipo de respuesta
+
+    //const fields = ['Numero de Orden', 'Mensaje de Error'];
+    //const csvContent = parse(erroresEntity.map(error => ({ 'Numero de Orden': error.numeroOrden, 'Mensaje de Error': error.mensaje })), { fields });
+    // Crear la línea de contenido CSV
+    const csvContent = `${numeroOrden},${respuestaFormateada}`;
+    
+
+    try {
+        // Verificar si el archivo ya existe
+        if (fs.existsSync(rutaCompleta)) {
+            // Si existe, agregar al archivo
+            fs.appendFileSync(rutaCompleta, csvContent);
+            console.log(`Respuesta para el número de orden ${numeroOrden} agregada a ${rutaCompleta}`);
+           // fs.appendFileSync(rutaCompleta, separatorRow);
+        } else {
+            // Si no existe, crear uno nuevo con los encabezados
+            fs.writeFileSync(rutaCompleta, `${fields.join(',')}\n${csvContent}`);
+            console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${rutaCompleta}`);
+        }
+        fs.appendFileSync(rutaCompleta, separatorRow);
+    } catch (error) {
+        console.error('Error al guardar la respuesta del API Entity:', error);
+    }
+}
+
+/*
+function guardarInformacionEntity(numeroOrden, respuesta) {
+    const nombreArchivo = path.join(obtenerRutaGuardado(), 'GuardarEntity.json');
+    fs.writeFileSync(nombreArchivo, JSON.stringify(respuesta, null, 2));
+    console.log(`Respuesta para el número de orden ${numeroOrden} guardada en ${nombreArchivo}`);
+}*/
+
 
 module.exports = { ejecutarAccion };
 

@@ -27,12 +27,16 @@ app.on('ready', () => {
 });
 
   
-ipcMain.on('execute-action', async (event, { tipo, nombreArchivo }) => {
+ipcMain.on('execute-action', async (event, { tipo, nombreArchivo, comment, customerNotified, visibleFront, status }) => {
     try {
-        await ejecutarAccion(tipo, nombreArchivo);
+        if (tipo === 'entity') {
+            await ejecutarAccion(tipo, nombreArchivo, comment, customerNotified, visibleFront, status);
+        } else {
+            await ejecutarAccion(tipo, nombreArchivo);
+        }
         event.reply('action-complete', 'Acción completada correctamente');
     } catch (error) {
-        console.log(error)
+        console.log(error);
         event.reply('action-complete', 'Error al ejecutar la acción');
     }
 });
